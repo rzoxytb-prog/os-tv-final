@@ -1,0 +1,62 @@
+name: Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: SDK Android (plateforme 34 + build-tools 34)
+        run: |
+          SDKM=$(ls -d "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager | sort -V | tail -1)
+          echo "sdkmanager : $SDKM"
+          yes | "$SDKM" --licenses > /dev/null || true
+          "$SDKM" "platforms;android-34" "build-tools;34.0.0"
+
+      # Garde la même clé de signature d'un build à l'autre (sinon l'APK ne s'installe pas par-dessus l'ancien)
+      - uses: actions/cache@v4
+        with:
+          path: roseos.keystore
+          key: roseos-keystore-v1
+
+      - name: Build APK
+        run: |
+          chmod +x build.sh
+          ./build.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RoseOS-androidtv
+          path: RoseOS.apk
+
+  webos-tizen:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Build LG webOS (.ipk)
+        run: python3 webos/build.py
+
+      - name: Build Samsung Tizen (.wgt, non signé)
+        run: python3 tizen/build.py
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RoseOS-webos-tizen
+          path: |
+            RoseOS-webos.ipk
+            RoseOS-tizen.wgt
